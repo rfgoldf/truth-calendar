@@ -295,6 +295,7 @@ export default function Home() {
   const [lastSync, setLastSync] = useState(null);
   const [selected, setSelected] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [filterDate, setFilterDate] = useState(null);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -330,7 +331,8 @@ export default function Home() {
   }, [loadEvents]);
 
   const grouped = groupByDate(events);
-  const dates = Object.keys(grouped).sort();
+  const allDates = Object.keys(grouped).sort();
+  const dates = filterDate ? allDates.filter(d => d === filterDate) : allDates;
   const meetingCount = events.filter((e) => e.meetingType !== "todoist").length;
   const today = new Date();
 
@@ -361,16 +363,22 @@ export default function Home() {
             {Array.from({ length: new Date(today.getFullYear(), today.getMonth(), 1).getDay() }, (_, i) => (
               <div key={`blank-${i}`} />
             ))}
-            {Array.from({ length: new Date(today.getFullYear(), today.getMonth()+1, 0).getDate() }, (_, i) => i+1).map(day => (
-              <button key={day} style={{
-                fontSize: 11, width: 24, height: 24, margin: "0 auto", borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: day === today.getDate() ? "#1e293b" : "transparent",
-                color: day === today.getDate() ? "#fff" : "#94a3b8",
-                fontWeight: day === today.getDate() ? 600 : 400,
-                cursor: "default", border: "none",
-              }}>{day}</button>
-            ))}
+            {Array.from({ length: new Date(today.getFullYear(), today.getMonth()+1, 0).getDate() }, (_, i) => i+1).map(day => {
+              const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+              const isToday = day === today.getDate();
+              const isSelected = filterDate === dateStr;
+              const hasEvents = !!grouped[dateStr];
+              return (
+                <button key={day} onClick={() => setFilterDate(isSelected ? null : dateStr)} style={{
+                  fontSize: 11, width: 24, height: 24, margin: "0 auto", borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: isToday ? "#1e293b" : isSelected ? "#e2e8f0" : "transparent",
+                  color: isToday ? "#fff" : hasEvents ? "#1e293b" : "#cbd5e1",
+                  fontWeight: isToday || hasEvents ? 600 : 400,
+                  cursor: hasEvents ? "pointer" : "default", border: "none",
+                }}>{day}</button>
+              );
+            })}
           </div>
         </div>
 
