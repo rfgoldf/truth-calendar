@@ -76,23 +76,52 @@ function dateHeading(dateStr) {
   return { label, sub };
 }
 
-const sourceColors = {
-  "Google – Work":     { bar: "#60a5fa", badge: "#eff6ff", badgeText: "#2563eb" },
-  "Google – Personal": { bar: "#4ade80", badge: "#f0fdf4", badgeText: "#16a34a" },
-  "Calendly":          { bar: "#a78bfa", badge: "#f5f3ff", badgeText: "#7c3aed" },
-  "Outlook":           { bar: "#fb923c", badge: "#fff7ed", badgeText: "#ea580c" },
-  "Todoist":           { bar: "#f87171", badge: "#fef2f2", badgeText: "#dc2626" },
+// User-defined calendar colors
+const CAL_COLORS = {
+  sparely:      { bar: "#60a5fa", badge: "#eff6ff", badgeText: "#2563eb" },   // blue
+  prime:        { bar: "#4ade80", badge: "#f0fdf4", badgeText: "#16a34a" },   // green
+  personal:     { bar: "#a78bfa", badge: "#f5f3ff", badgeText: "#7c3aed" },   // purple
+  goldenglue:   { bar: "#fb923c", badge: "#fff7ed", badgeText: "#ea580c" },   // orange
+  todoist:      { bar: "#f87171", badge: "#fef2f2", badgeText: "#dc2626" },   // red
+  calendly:     { bar: "#38bdf8", badge: "#f0f9ff", badgeText: "#0284c7" },   // sky blue
 };
 
-function calColor(source) {
-  return sourceColors[source] || { bar: "#cbd5e1", badge: "#f1f5f9", badgeText: "#64748b" };
+const PALETTE = [
+  { bar: "#34d399", badge: "#ecfdf5", badgeText: "#059669" },
+  { bar: "#f472b6", badge: "#fdf2f8", badgeText: "#db2777" },
+  { bar: "#facc15", badge: "#fefce8", badgeText: "#ca8a04" },
+  { bar: "#818cf8", badge: "#eef2ff", badgeText: "#4f46e5" },
+];
+
+function calColor(name) {
+  if (!name) return { bar: "#cbd5e1", badge: "#f1f5f9", badgeText: "#64748b" };
+  const n = name.toLowerCase();
+  if (n === "todoist") return CAL_COLORS.todoist;
+  if (n === "calendly") return CAL_COLORS.calendly;
+  if (n.includes("sparely")) return CAL_COLORS.sparely;
+  if (n.includes("prime") || n.includes("outlook") || n.includes("microsoft")) return CAL_COLORS.prime;
+  if (n.includes("rachaelgoldfarb") || n === "personal") return CAL_COLORS.personal;
+  if (n.includes("golden glue") || n.includes("goldenglue")) return CAL_COLORS.goldenglue;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffff;
+  return PALETTE[hash % PALETTE.length];
+}
+
+function friendlyCalName(name) {
+  if (!name) return name;
+  const n = name.toLowerCase();
+  if (n === "rg@rachaelgoldfarb.org" || n.includes("rachaelgoldfarb")) return "Personal";
+  if (n.includes("golden glue")) return "Golden Glue";
+  if (n.includes("sparely")) return "Sparely";
+  if (n.includes("prime")) return "Prime";
+  return name;
 }
 
 function Badge({ source }) {
   const c = calColor(source);
   return (
     <span style={{ background: c.badge, color: c.badgeText, fontSize: 11, padding: "2px 8px", borderRadius: 999, fontWeight: 500, whiteSpace: "nowrap" }}>
-      {source}
+      {friendlyCalName(source)}
     </span>
   );
 }
@@ -137,10 +166,22 @@ function Icon({ name, size = 13, color = "#94a3b8" }) {
   );
 }
 
-function EventCard({ event, onClick, selected }) {
+function EventCard({ event, onClick, selected, research }) {
   const isTodoist = event.meetingType === "todoist";
   const c = calColor(event.calendarName);
   const [hovered, setHovered] = useState(false);
+
+  // Build subtitle: prefer research role/company, avoid duplicating the title
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  let subtitle = null;
+  if (research?.role || research?.company) {
+    subtitle = [research.role, research.company].filter(Boolean).join(" · ");
+  } else if (event.primaryPerson && !isTodoist) {
+    const p = event.primaryPerson;
+    const nameIsEmail = emailRegex.test(p.name || "");
+    const nameMatchesTitle = p.name === event.title || p.email === event.title;
+    if (!nameMatchesTitle && p.name && !nameIsEmail) subtitle = p.name;
+  }
 
   return (
     <button
@@ -150,14 +191,14 @@ function EventCard({ event, onClick, selected }) {
       style={{
         width: "100%", textAlign: "left",
         padding: "12px 14px", borderRadius: 12,
-        border: selected ? "1.5px solid #cbd5e1" : "1.5px solid transparent",
+        border: selected ? "1.5px solid #e2e8f0" : "1.5px solid transparent",
         background: selected || hovered ? "#f8fafc" : "transparent",
         cursor: "pointer", transition: "all 0.12s",
         display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
       }}
     >
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
-        <div style={{ textAlign: "right", minWidth: 48, paddingTop: 2, flexShrink: 0 }}>
+        <div style={{ textAlign: "right", minWidth: 52, paddingTop: 2, flexShrink: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: "#475569" }}>{fmt(event.startTime)}</div>
           <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{dur(event.startTime, event.endTime)}</div>
         </div>
@@ -166,17 +207,12 @@ function EventCard({ event, onClick, selected }) {
           <div style={{ fontSize: 14, fontWeight: 600, color: isTodoist ? "#dc2626" : "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {event.title}
           </div>
-          {event.subtitle && (
+          {subtitle && (
             <div style={{ fontSize: 13, color: "#64748b", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {event.subtitle}
+              {subtitle}
             </div>
           )}
-          {event.primaryPerson && !event.subtitle && (
-            <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
-              {[event.primaryPerson.name, event.primaryPerson.email].filter(Boolean).join(" · ")}
-            </div>
-          )}
-          <div style={{ marginTop: 8 }}><Badge source={event.calendarName} /></div>
+          <div style={{ marginTop: 7 }}><Badge source={event.calendarName} /></div>
         </div>
       </div>
       {!isTodoist && event.meetingLink && (
@@ -241,18 +277,30 @@ function DetailPanel({ event, onClose }) {
 
         {isTodoist && (
           <div style={{ background: "#fef2f2", borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "#dc2626", marginBottom: 10 }}>Tasks due today</div>
-            {(event.tasks || []).map((t, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, fontSize: 13, color: "#7f1d1d" }}>
-                <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#f87171", marginTop: 6, flexShrink: 0 }} />
-                {t}
-              </div>
-            ))}
+            <div style={{ fontSize: 13, color: "#dc2626" }}>Protected focus time. No meetings.</div>
           </div>
         )}
 
         {!isTodoist && loading && (
           <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 16 }}>Researching…</div>
+        )}
+
+        {!isTodoist && event.questionsAndAnswers?.length > 0 && (
+          <>
+            <div style={{ height: 1, background: "#f1f5f9", marginBottom: 20 }} />
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <Icon name="mail" size={12} />
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em" }}>Booking Details</span>
+              </div>
+              {event.questionsAndAnswers.map((qa, i) => (
+                <div key={i} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 2 }}>{qa.question}</div>
+                  <div style={{ fontSize: 13, color: "#475569" }}>{qa.answer}</div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {!isTodoist && research && (
@@ -296,6 +344,7 @@ export default function Home() {
   const [selected, setSelected] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [filterDate, setFilterDate] = useState(null);
+  const [researchMap, setResearchMap] = useState({});
 
   const loadEvents = useCallback(async () => {
     try {
@@ -323,12 +372,34 @@ export default function Home() {
 
   useEffect(() => {
     loadEvents();
-    // Register push notifications on first load
     registerPushNotifications();
-    // Poll every 60 seconds as a fallback (webhooks handle real-time updates)
     const interval = setInterval(loadEvents, 60000);
     return () => clearInterval(interval);
   }, [loadEvents]);
+
+  // Pre-load research for all event attendees so role/company shows on cards
+  useEffect(() => {
+    if (!events.length) return;
+    const seen = new Set();
+    events.forEach(async (e) => {
+      const p = e.primaryPerson;
+      if (!p) return;
+      const key = p.email || p.name;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      if (researchMap[key]) return;
+      try {
+        const params = new URLSearchParams();
+        if (p.email) params.set("email", p.email);
+        if (p.name) params.set("name", p.name);
+        const personId = encodeURIComponent(p.email || p.name);
+        const res = await fetch(`/api/research/${personId}?${params}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && !data.error) setResearchMap(prev => ({ ...prev, [key]: data }));
+      } catch {}
+    });
+  }, [events]);
 
   const grouped = groupByDate(events);
   const allDates = Object.keys(grouped).sort();
@@ -387,12 +458,15 @@ export default function Home() {
           <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
             Calendars
           </div>
-          {Object.entries(sourceColors).map(([name, c]) => (
-            <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 3, background: c.bar, flexShrink: 0 }} />
-              <span style={{ fontSize: 13, color: "#475569" }}>{name}</span>
-            </div>
-          ))}
+          {[...new Set(events.map(e => e.calendarName).filter(Boolean))].map(name => {
+            const c = calColor(name);
+            return (
+              <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 3, background: c.bar, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: "#475569" }}>{friendlyCalName(name)}</span>
+              </div>
+            );
+          })}
         </div>
 
         {/* Sync status */}
@@ -455,6 +529,7 @@ export default function Home() {
                           event={event}
                           onClick={setSelected}
                           selected={selected?.id === event.id}
+                          research={event.primaryPerson ? researchMap[event.primaryPerson.email || event.primaryPerson.name] : null}
                         />
                       ))}
                     </div>

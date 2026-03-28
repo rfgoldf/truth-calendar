@@ -25,10 +25,13 @@ export default async function handler(req, res) {
     const research = await researchPerson({ name, email, company });
 
     if (research) {
-      await setCachedResearch(personKey, research);
+      // Cache in the background — don't let a KV failure kill the response
+      setCachedResearch(personKey, research).catch((err) =>
+        console.error("KV cache write failed (non-fatal):", err.message)
+      );
     }
 
-    return res.status(200).json({ ...research, fromCache: false });
+    return res.status(200).json({ ...(research || {}), fromCache: false });
   } catch (err) {
     console.error("Research error:", err);
     return res.status(500).json({ error: err.message });
